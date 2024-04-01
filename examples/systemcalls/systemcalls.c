@@ -61,7 +61,7 @@ bool do_exec(int count, ...)
 
     if (command[0][0] != '/') {
         printf("command is not absolute");
-        exit(1);
+        return false;
     }
 
     pid = fork();
@@ -118,7 +118,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
     if (command[0][0] != '/') {
         printf("command is not absolute");
-        exit(1);
+        return false;
     }
 
     // open the file for stdout redirection
