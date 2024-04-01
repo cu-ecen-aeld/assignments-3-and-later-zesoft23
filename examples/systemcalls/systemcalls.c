@@ -59,8 +59,8 @@ bool do_exec(int count, ...)
     int status;
     pid_t pid;
 
+    // if the command does not start with "/" it's not absolute
     if (command[0][0] != '/') {
-        printf("command is not absolute");
         return false;
     }
 
@@ -70,7 +70,7 @@ bool do_exec(int count, ...)
     } else if (pid == 0) {
         status = execv(command[0], commandargs);
     }
-    if (status == -1) {
+    if (status != 0) {
         exit(status);
         perror("execl");
     }
@@ -133,7 +133,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     } else if (pid == 0) {
         status = execv(command[0], commandargs);
     }
-    if (status == -1) {
+    if (status != 0) {
         exit(status);
         perror("execl");
     }
