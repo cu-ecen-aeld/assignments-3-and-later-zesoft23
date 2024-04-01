@@ -57,6 +57,7 @@ bool do_exec(int count, ...)
     command[count] = command[count];
 
     int status;
+    bool return_value = true;
     pid_t pid;
 
     // if the command does not start with "/" it's not absolute
@@ -70,9 +71,9 @@ bool do_exec(int count, ...)
     } else if (pid == 0) {
         status = execv(command[0], commandargs);
     }
+
     if (status != 0) {
-        exit(status);
-        perror("execl");
+        return_value = false;
     }
 
     waitpid(pid, &status, 0);
@@ -89,7 +90,7 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
-    return true;
+    return return_value;
 }
 
 /**
@@ -104,6 +105,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     char * command[count+1];
     char * commandargs[count];
     int i;
+    bool return_value = true;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -134,8 +136,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         status = execv(command[0], commandargs);
     }
     if (status != 0) {
-        exit(status);
-        perror("execl");
+        return_value = false;
     }
     waitpid(pid, &status, 0);
 
@@ -152,5 +153,5 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
     va_end(args);
 
-    return true;
+    return return_value;
 }
