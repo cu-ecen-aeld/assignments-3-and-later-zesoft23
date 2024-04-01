@@ -1,4 +1,8 @@
 #include "systemcalls.h"
+#include "stdlib.h"
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -10,12 +14,11 @@
 bool do_system(const char *cmd)
 {
 
-/*
- * TODO  add your code here
- *  Call the system() function with the command set in the cmd
- *   and return a boolean true if the system() call completed with success
- *   or false() if it returned a failure
-*/
+    int return_code = system(cmd);
+
+    if (return_code != 0) {
+        return false;
+    }
 
     return true;
 }
@@ -39,15 +42,40 @@ bool do_exec(int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    char * commandargs[count];
     int i;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        if (i > 0) {
+            commandargs[i - 1] = va_arg(args, char *);
+        }
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
     command[count] = command[count];
+
+    int status;
+    pid_t pid;
+
+    if (command[0][0] != '/') {
+        printf("command is not absolute");
+        exit(1);
+    }
+
+    pid = fork();
+    if (pid == -1) {
+        return false;
+    } else if (pid == 0) {
+        status = execv(command[0], commandargs);
+    }
+    if (status == -1) {
+        exit(status);
+        perror("execl");
+    }
+
+    waitpid(pid, &status, 0);
 
 /*
  * TODO:
@@ -74,16 +102,45 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    char * commandargs[count];
     int i;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        if (i > 0) {
+            commandargs[i - 1] = va_arg(args, char *);
+        }
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
     command[count] = command[count];
 
+    if (command[0][0] != '/') {
+        printf("command is not absolute");
+        exit(1);
+    }
+
+    // open the file for stdout redirection
+    FILE *myfile = fopen(outputfile, "w");
+
+    int status;
+    pid_t pid;
+
+    pid = fork();
+    if (pid == -1) {
+        return false;
+    } else if (pid == 0) {
+        status = execv(command[0], commandargs);
+    }
+    if (status == -1) {
+        exit(status);
+        perror("execl");
+    }
+    waitpid(pid, &status, 0);
+
+
+    fclose(myfile);
 
 /*
  * TODO
