@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -43,25 +44,20 @@ bool do_exec(int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
-    char * commandargs[count];
     int i;
+    pid_t pid;
+    int status;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
-        if (i > 0) {
-            commandargs[i - 1] = va_arg(args, char *);
-        }
     }
+    char * path_command = command[0];
+    command[0] = strrchr(command[0], '/') + 1;
+
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
-    int status;
-    pid_t pid;
-
-    // if the command does not start with "/" it's not absolute
-    if (command[0][0] != '/') {
+    if (path_command[0] != '/') {
+        printf("command is not absolute");
         return false;
     }
 
@@ -69,20 +65,11 @@ bool do_exec(int count, ...)
     if (pid == -1) {
         return false;
     } else if (pid == 0) {
-        execv(command[0], commandargs);
+        execv(path_command, command);
     }
 
     waitpid(pid, &status, 0);
     printf("my pid value %d\n", status);
-/*
- * TODO:
- *   Execute a system command by calling fork, execv(),
- *   and wait instead of system (see LSP page 161).
- *   Use the command[0] as the full path to the command to execute
- *   (first argument to execv), and use the remaining arguments
- *   as second argument to the execv() command.
- *
-*/
 
     va_end(args);
 
@@ -103,26 +90,20 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
-    char * commandargs[count];
     int i;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
-        if (i > 0) {
-            // commandargs[i - 1] = va_arg(args, char *);
-        }
     }
-    command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+    char * path_command = command[0];
+    command[0] = strrchr(command[0], '/') + 1;
 
-    if (command[0][0] != '/') {
+    command[count] = NULL;
+
+    if (path_command[0] != '/') {
         printf("command is not absolute");
         return false;
     }
-
-
 
     int status;
     pid_t pid;
@@ -134,17 +115,15 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         return false;
     } else if (pid == 0) {
         // open the file for stdout redirection
-        int fd = open(outputfile, O_WRONLY|O_CREAT|O_TRUNC);
+        int fd = open(outputfile, O_WRONLY|O_CREAT|O_TRUNC, 0644);
         // fflush(stdout);
         int dup_value = dup2(fd, 1);
-        close(fd);
+        // close(fd);
         if (dup_value < 0) {
             perror("dup2");
             return false;
         }
-        printf("hello i am hrere....\n\n");
-        status = execv(command[0], commandargs);
-        printf("and not here....\n\n");
+        status = execv(path_command, command);
 
     }
 
