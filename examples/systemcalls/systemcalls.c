@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -57,7 +58,6 @@ bool do_exec(int count, ...)
     command[count] = command[count];
 
     int status;
-    bool return_value = true;
     pid_t pid;
 
     // if the command does not start with "/" it's not absolute
@@ -69,15 +69,11 @@ bool do_exec(int count, ...)
     if (pid == -1) {
         return false;
     } else if (pid == 0) {
-        status = execv(command[0], commandargs);
-    }
-
-    if (status != 0) {
-        return_value = false;
+        execv(command[0], commandargs);
     }
 
     waitpid(pid, &status, 0);
-
+    printf("my pid value %d\n", status);
 /*
  * TODO:
  *   Execute a system command by calling fork, execv(),
@@ -90,7 +86,11 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
-    return return_value;
+    if (status == 0) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 /**
@@ -105,12 +105,11 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     char * command[count+1];
     char * commandargs[count];
     int i;
-    bool return_value = true;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
         if (i > 0) {
-            commandargs[i - 1] = va_arg(args, char *);
+            // commandargs[i - 1] = va_arg(args, char *);
         }
     }
     command[count] = NULL;
@@ -123,35 +122,40 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         return false;
     }
 
-    // open the file for stdout redirection
-    FILE *myfile = fopen(outputfile, "w");
+
 
     int status;
     pid_t pid;
 
+    fflush(stdout);
     pid = fork();
     if (pid == -1) {
+        perror("fork");
         return false;
     } else if (pid == 0) {
+        // open the file for stdout redirection
+        int fd = open(outputfile, O_WRONLY|O_CREAT|O_TRUNC);
+        // fflush(stdout);
+        int dup_value = dup2(fd, 1);
+        close(fd);
+        if (dup_value < 0) {
+            perror("dup2");
+            return false;
+        }
+        printf("hello i am hrere....\n\n");
         status = execv(command[0], commandargs);
+        printf("and not here....\n\n");
+
     }
-    if (status != 0) {
-        return_value = false;
-    }
+
     waitpid(pid, &status, 0);
 
 
-    fclose(myfile);
-
-/*
- * TODO
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
- *   redirect standard out to a file specified by outputfile.
- *   The rest of the behaviour is same as do_exec()
- *
-*/
-
     va_end(args);
 
-    return return_value;
+    if (status == 0) {
+        return true;
+    } else {
+        return false;
+    }
 }
