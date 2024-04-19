@@ -7,7 +7,7 @@ all: $(TARGET)
 # if crosscompile is specified, prepend that to gcc
 $(TARGET) : $(OBJS)
 # $(TARGET) : writer.c
-	$(CROSS_COMPILE)gcc $(SRC) -o $(TARGET)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJS) -o $(TARGET) $(LDFLAGS)
 
 clean:
 	-rm -f *.o $(TARGET) *.elf *.map
