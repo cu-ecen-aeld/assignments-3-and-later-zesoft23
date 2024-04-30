@@ -11,11 +11,11 @@ LOG=/var/log/$NAME.log
 
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 
-common_opts="--quiet --chuid $USER --pidfile $PIDFILE"
+common_opts="--chuid $USER --pidfile $PIDFILE"
 
 do_start(){
     start-stop-daemon --start $common_opts --chdir $DIR --make-pidfile --background --startas \
-        /bin/bash -- -c "exec $DAEMON $DAEMON_ARGS > $LOG 2>&1"
+        /bin/sh -- -c "exec $DAEMON $DAEMON_ARGS > $LOG 2>&1"
 }
 
 do_stop(){
