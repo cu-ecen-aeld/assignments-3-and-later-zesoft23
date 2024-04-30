@@ -22,6 +22,46 @@
 FILE *myfile;
 int new_fd;
 
+void daemonize() {
+    pid_t pid, sid;
+
+    // Fork off the parent process
+    pid = fork();
+    if (pid < 0) {
+        exit(EXIT_FAILURE);
+    }
+    if (pid > 0) {
+        exit(EXIT_SUCCESS);
+    }
+    // Create a new SID for the child process
+    sid = setsid();
+    if (sid < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    /* Fork off for the second time*/
+    pid = fork();
+
+    /* An error occurred */
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+
+    /* Success: Let the parent terminate */
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+
+    // Change the current working directory
+    if ((chdir("/")) < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    // Close standard file descriptors
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+
+}
+
 void sigchld_handler(int s)
 {
 
@@ -68,8 +108,9 @@ void *get_in_addr(struct sockaddr *sa)
 
 // arg 1 is path to file
 // arg 2 is string to write to file
-int main(void)
+int main(int argc, char *argv[])
 {
+    int daemonflag = 0;
     int sockfd; // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr; // connector's address information
@@ -84,6 +125,21 @@ int main(void)
     int itemswritten;
     int total_size = 0;
 
+    int c;
+    // Get the args -d arg if it exists
+    while ((c = getopt(argc, argv, "d")) != -1)
+        switch (c)
+        {
+        case 'd':
+            daemonflag = 1;
+            break;
+        default:
+            abort();
+        }
+
+    if (daemonflag) {
+        daemonize();
+    }
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -211,7 +267,6 @@ int main(void)
                     packet_finished = true;
                 }
             }
-
         }
 
         // char *return_buf = malloc(total_size);
@@ -232,26 +287,29 @@ int main(void)
             //     { /* Error */
             //     }
 
-                /* Allocate our buffer to that size. */
-                source = malloc(sizeof(char) * (total_size + 1));
+            /* Allocate our buffer to that size. */
+            source = malloc(sizeof(char) * (total_size + 1));
 
-                /* Go back to the start of the file. */
-                fseek(myfile, 0, SEEK_SET);
+            /* Go back to the start of the file. */
+            fseek(myfile, 0, SEEK_SET);
 
-                /* Read the entire file into memory. */
-                size_t newLen = fread(source, sizeof(char), total_size, myfile);
-                if (ferror(myfile) != 0)
-                {
-                    fputs("Error reading file", stderr);
-                }
-                else
-                {
-                    source[newLen++] = '\0'; /* Just to be safe. */
-                }
+            /* Read the entire file into memory. */
+            size_t newLen = fread(source, sizeof(char), total_size, myfile);
+            if (ferror(myfile) != 0)
+            {
+                fputs("Error reading file", stderr);
+            }
+            else
+            {
+                source[newLen++] = '\0'; /* Just to be safe. */
+            }
         }
 
         send(new_fd, source, total_size, 0);
 
+        if (daemonflag) {
+            printf("demons are here \n");
+        }
         // printf("numb ytes%ld \n", numbyte_written);
 
         // if (!fork()) { // this is the child process
@@ -262,10 +320,8 @@ int main(void)
         //     exit(0);
         // }
         close(new_fd); // parent doesn't need this
-        free(source); /* Don't forget to call free() later! */
+        free(source);  /* Don't forget to call free() later! */
         fclose(myfile);
-
-
     }
     return 0;
 }
