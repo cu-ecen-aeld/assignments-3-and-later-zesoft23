@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
     int rv;
     bool packet_finished = false;
     int i;
-    int itemswritten;
+    // int itemswritten;
     int total_size = 0;
 
     int c;
@@ -251,13 +251,13 @@ int main(int argc, char *argv[])
 
             total_size += received_size;
 
-            printf("client: received '%s' of size %d\n", buf, received_size);
+            // printf("client: received '%s' of size %d\n", buf, received_size);
 
-            itemswritten = fwrite(buf, sizeof(char), received_size, myfile);
+            fwrite(buf, sizeof(char), received_size, myfile);
 
             fflush(myfile);
 
-            printf("wrote %d\n", itemswritten);
+            // printf("wrote %d\n", itemswritten);
 
             // this may be dumb if we don't have the new line early enough
             for (i = 0; i < received_size; i++)
@@ -306,19 +306,6 @@ int main(int argc, char *argv[])
         }
 
         send(new_fd, source, total_size, 0);
-
-        if (daemonflag) {
-            printf("demons are here \n");
-        }
-        // printf("numb ytes%ld \n", numbyte_written);
-
-        // if (!fork()) { // this is the child process
-        //     close(sockfd); // child doesn't need the listener
-        //     if (send(new_fd, "Hello, world!", 13, 0) == -1)
-        //         perror("send");
-        //     close(new_fd);
-        //     exit(0);
-        // }
         close(new_fd); // parent doesn't need this
         free(source);  /* Don't forget to call free() later! */
         fclose(myfile);
