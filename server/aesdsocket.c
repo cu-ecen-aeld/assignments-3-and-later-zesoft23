@@ -122,7 +122,6 @@ int main(int argc, char *argv[])
     int rv;
     bool packet_finished = false;
     int i;
-    // int itemswritten;
     int total_size = 0;
 
     int c;
@@ -251,15 +250,11 @@ int main(int argc, char *argv[])
 
             total_size += received_size;
 
-            // printf("client: received '%s' of size %d\n", buf, received_size);
 
             fwrite(buf, sizeof(char), received_size, myfile);
 
             fflush(myfile);
 
-            // printf("wrote %d\n", itemswritten);
-
-            // this may be dumb if we don't have the new line early enough
             for (i = 0; i < received_size; i++)
             {
                 if (buf[i] == '\n')
@@ -269,24 +264,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        // char *return_buf = malloc(total_size);
-        // if (buf == NULL)
-        // {
-        //     exit(1);
-        // }
-
         char *source = NULL;
         if (myfile != NULL)
         {
-            // /* Go to the end of the file. */
-            // if (fseek(myfile, 0L, SEEK_END) == 0)
-            // {
-            //     /* Get the size of the file. */
-            //     long bufsize = ftell(myfile);
-            //     if (bufsize == -1)
-            //     { /* Error */
-            //     }
-
             /* Allocate our buffer to that size. */
             source = malloc(sizeof(char) * (total_size + 1));
 
