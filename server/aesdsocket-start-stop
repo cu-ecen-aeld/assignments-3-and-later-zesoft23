@@ -14,7 +14,7 @@ export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 common_opts="--chuid $USER --pidfile $PIDFILE"
 
 do_start(){
-    start-stop-daemon --start $common_opts --chdir $DIR --make-pidfile --background --startas \
+    start-stop-daemon --start $common_opts --make-pidfile --background --startas \
         /bin/sh -- -c "exec $DAEMON $DAEMON_ARGS > $LOG 2>&1"
 }
 
