@@ -30,7 +30,6 @@ struct thread_data
 {
 
     pthread_mutex_t *write_mutex;
-    int thread_num;
     int sock_fd;
     /**
      * Set to true if the thread completed with success, false
@@ -233,7 +232,7 @@ void *receive_write_send(void *thread_param)
 void* ten_second_timer(void *thread_param)
 {
 
-    struct tm *tmp;
+    // struct tm *tmp;
 
     struct thread_data *thread_func_args = (struct thread_data *)thread_param;
     // // Receive via file descriptor until \n
@@ -251,12 +250,11 @@ void* ten_second_timer(void *thread_param)
 
         if (elapsed_time >= 10.0)
         {
-            tmp = localtime(&current_time);
-            if (tmp == NULL)
-            {
-                perror("localtime");
-                exit(EXIT_FAILURE);
-            }
+            // if (tmp == NULL)
+            // {
+            //     perror("localtime");
+            //     exit(EXIT_FAILURE);
+            // }
 
             char time_str[128];
 
@@ -266,7 +264,7 @@ void* ten_second_timer(void *thread_param)
 
             FILE *localfile = fopen(FILELOCATION, "a+");
 
-            strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", tmp);
+            strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
 
 
             // fwrite("timestamp:", sizeof(char), 12, localfile);
@@ -330,8 +328,17 @@ int main(int argc, char *argv[])
     struct thread_data *thread_param = malloc(sizeof(struct thread_data));
     thread_param->write_mutex = &write_mutex;
     thread_param->start_time = start_time;
+    thread_param->thread_complete_success = false;
+    thread_param->sock_fd = 0;
     pthread_create(&p_thread, NULL,
                    &ten_second_timer, thread_param);
+
+    struct entry *thread_linked_list_entry = malloc(sizeof(struct entry));
+    thread_linked_list_entry->thread_data = thread_param;
+    thread_linked_list_entry->thread_id = &p_thread;
+
+    SLIST_INSERT_HEAD(&head, thread_linked_list_entry, entries);
+
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -411,6 +418,7 @@ int main(int argc, char *argv[])
     printf("server: waiting for connections...\n");
 
     struct entry *np; // used for iteration
+    // struct entry *np_to_remove;
 
     while (1)
     { // main accept() loop
@@ -436,6 +444,7 @@ int main(int argc, char *argv[])
         pthread_t p_thread;
         thread_param->write_mutex = &write_mutex;
         thread_param->sock_fd = new_fd;
+        thread_param->thread_complete_success = false;
 
         // Put some things in the list
         struct entry *thread_linked_list_entry = malloc(sizeof(struct entry));
@@ -444,16 +453,29 @@ int main(int argc, char *argv[])
 
         syslog(LOG_DEBUG, "server: created thread");
 
-        pthread_create(&p_thread, NULL,
-                       &receive_write_send, thread_param);
+        pthread_create(&p_thread, NULL, &receive_write_send, thread_param);
 
         SLIST_INSERT_HEAD(&head, thread_linked_list_entry, entries);
 
-        SLIST_FOREACH(np, &head, entries)
-        if (np->thread_data->thread_complete_success)
-        {
+        // SLIST_FOREACH(np, &head, entries)
+        // if (np->thread_data->thread_complete_success)
+        // {
+        //     pthread_join(*(np->thread_id), NULL);
+
+        //     break;
+        // }
+
+        // janky and doesn't assumes first in first out until it can join
+        np = SLIST_FIRST(&head);
+        if (np->thread_data->thread_complete_success) {
             pthread_join(*(np->thread_id), NULL);
+            SLIST_REMOVE_HEAD(&head, entries);
+            free(np->thread_data);
+            free(np);
         }
+
+        // SLIST_REMOVE(&head, np_to_remove, entry, entries);;
+
     }
 
     return rv;

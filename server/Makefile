@@ -1,6 +1,6 @@
 SRC := aesdsocket.c
 TARGET = aesdsocket
-CFLAGS := -Wall -Werror
+CFLAGS := -Wall -Werror -g
 OBJS := $(SRC:.c=.o)
 
 all: $(TARGET)
