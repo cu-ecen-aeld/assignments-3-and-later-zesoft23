@@ -1,6 +1,6 @@
 SRC := aesdsocket.c
 TARGET = aesdsocket
-CFLAGS := -Wall -Werror -g
+CFLAGS := -Wall -Werror
 OBJS := $(SRC:.c=.o)
 INCLUDES = -pthread
 

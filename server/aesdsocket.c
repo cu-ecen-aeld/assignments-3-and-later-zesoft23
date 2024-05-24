@@ -151,11 +151,8 @@ void *receive_write_send(void *thread_param)
     struct thread_data *thread_func_args = (struct thread_data *)thread_param;
     // // Receive via file descriptor until \n
     packet_finished = false;
-    printf("waiting for mutex %d\n", thread_func_args->sock_fd);
 
     pthread_mutex_lock(thread_func_args->write_mutex);
-
-    printf("I got the mutex %d\n", thread_func_args->sock_fd);
 
     FILE *localfile = fopen(FILELOCATION, "a+");
 
@@ -187,7 +184,7 @@ void *receive_write_send(void *thread_param)
         }
     }
 
-    printf("received: %s\n", buf);
+    printf("received %s\n", buf);
 
     char *source = NULL;
     long file_size;
@@ -213,14 +210,13 @@ void *receive_write_send(void *thread_param)
         }
     }
 
-    printf("sending %s\n", source);
+    // printf("sending %s\n", source);
 
     send(thread_func_args->sock_fd, source, file_size, 0);
-    close(thread_func_args->sock_fd); // parent doesn't need this
-    free(source);                     /* call free to */
-    fclose(localfile);                // Something may be messed up here with sending back between threads, but the mutex should deal with it
 
-    printf("unlocking mutex from %d\n", thread_func_args->sock_fd);
+    close(thread_func_args->sock_fd); // parent doesn't need this
+    free(source);                     // call free to buffer used for reading the file
+    fclose(localfile);                // Something may be messed up here with sending back between threads, but the mutex should deal with it
 
     pthread_mutex_unlock(thread_func_args->write_mutex);
 
@@ -232,12 +228,10 @@ void *receive_write_send(void *thread_param)
 void* ten_second_timer(void *thread_param)
 {
 
-    // struct tm *tmp;
-
     struct thread_data *thread_func_args = (struct thread_data *)thread_param;
     // // Receive via file descriptor until \n
 
-    double elapsed_time;
+    // double elapsed_time;
 
     time_t current_time;
 
@@ -245,41 +239,32 @@ void* ten_second_timer(void *thread_param)
 
     while (1)
     {
+        // elapsed_time = difftime(current_time, thread_func_args->start_time);
+
+
+        sleep(10);
         current_time = time(NULL);
-        elapsed_time = difftime(current_time, thread_func_args->start_time);
 
-        if (elapsed_time >= 10.0)
-        {
-            // if (tmp == NULL)
-            // {
-            //     perror("localtime");
-            //     exit(EXIT_FAILURE);
-            // }
+        char time_str[128];
 
-            char time_str[128];
+        // 0 out the array to end the write
+        memset(time_str, 0, sizeof(time_str));
+        pthread_mutex_lock(thread_func_args->write_mutex);
 
-            // 0 out the array to end the write
-            memset(time_str, 0, sizeof(time_str));
-            pthread_mutex_lock(thread_func_args->write_mutex);
+        FILE *localfile = fopen(FILELOCATION, "a+");
 
-            FILE *localfile = fopen(FILELOCATION, "a+");
+        strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
 
-            strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
+        fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
 
+        fflush(localfile);
 
-            // fwrite("timestamp:", sizeof(char), 12, localfile);
-            fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
-            // fwrite("\n", sizeof(char), 2, localfile);
+        fclose(localfile);
 
-            fflush(localfile);
-
-            fclose(localfile);
-
-            pthread_mutex_unlock(thread_func_args->write_mutex);
+        pthread_mutex_unlock(thread_func_args->write_mutex);
 
 
-            thread_func_args->start_time = time(NULL);
-        }
+        thread_func_args->start_time = time(NULL);
     }
 
     return thread_param;
@@ -418,7 +403,6 @@ int main(int argc, char *argv[])
     printf("server: waiting for connections...\n");
 
     struct entry *np; // used for iteration
-    // struct entry *np_to_remove;
 
     while (1)
     { // main accept() loop
@@ -437,7 +421,6 @@ int main(int argc, char *argv[])
                   s, sizeof s);
         printf("server: got connection from %s\n", s);
         syslog(LOG_DEBUG, "server: got connection from %s\n", s);
-        /////////////
 
         struct thread_data *thread_param = malloc(sizeof(struct thread_data));
 
@@ -457,14 +440,6 @@ int main(int argc, char *argv[])
 
         SLIST_INSERT_HEAD(&head, thread_linked_list_entry, entries);
 
-        // SLIST_FOREACH(np, &head, entries)
-        // if (np->thread_data->thread_complete_success)
-        // {
-        //     pthread_join(*(np->thread_id), NULL);
-
-        //     break;
-        // }
-
         // janky and doesn't assumes first in first out until it can join
         np = SLIST_FIRST(&head);
         if (np->thread_data->thread_complete_success) {
@@ -474,7 +449,6 @@ int main(int argc, char *argv[])
             free(np);
         }
 
-        // SLIST_REMOVE(&head, np_to_remove, entry, entries);;
 
     }
 
