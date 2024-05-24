@@ -259,6 +259,9 @@ void* ten_second_timer(void *thread_param)
             }
 
             char time_str[128];
+
+            // 0 out the array to end the write
+            memset(time_str, 0, sizeof(time_str));
             pthread_mutex_lock(thread_func_args->write_mutex);
 
             FILE *localfile = fopen(FILELOCATION, "a+");
