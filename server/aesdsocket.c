@@ -39,15 +39,15 @@ struct thread_data
     bool thread_complete_success;
 
     // These are just for the timing components
-    time_t t;
-    struct tm *tmp;
+    time_t start_time;
 };
 
 struct entry
 {
     struct thread_data *thread_data;
     pthread_t *thread_id;
-    SLIST_ENTRY(entry) entries; // singly linked list
+    SLIST_ENTRY(entry)
+    entries; // singly linked list
 };
 
 SLIST_HEAD(slisthead, entry);
@@ -140,7 +140,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-void* receive_write_send(void* thread_param)
+void *receive_write_send(void *thread_param)
 {
 
     syslog(LOG_DEBUG, "inside of my thread");
@@ -149,7 +149,7 @@ void* receive_write_send(void* thread_param)
     bool packet_finished = false;
     char buf[BUFFER_SIZE];
     int i;
-    struct thread_data* thread_func_args = (struct thread_data *) thread_param;
+    struct thread_data *thread_func_args = (struct thread_data *)thread_param;
     // // Receive via file descriptor until \n
     packet_finished = false;
     printf("waiting for mutex %d\n", thread_func_args->sock_fd);
@@ -161,7 +161,6 @@ void* receive_write_send(void* thread_param)
     FILE *localfile = fopen(FILELOCATION, "a+");
 
     // I think I can just spawn after getting a connection, less things to pass thru
-
 
     while (packet_finished != true)
     {
@@ -191,7 +190,6 @@ void* receive_write_send(void* thread_param)
 
     printf("received: %s\n", buf);
 
-
     char *source = NULL;
     long file_size;
     if (localfile != NULL)
@@ -218,28 +216,79 @@ void* receive_write_send(void* thread_param)
 
     printf("sending %s\n", source);
 
-
     send(thread_func_args->sock_fd, source, file_size, 0);
-    close(thread_func_args->sock_fd);  // parent doesn't need this
-    free(source);   /* call free to */
-    fclose(localfile); // Something may be messed up here with sending back between threads, but the mutex should deal with it
+    close(thread_func_args->sock_fd); // parent doesn't need this
+    free(source);                     /* call free to */
+    fclose(localfile);                // Something may be messed up here with sending back between threads, but the mutex should deal with it
 
     printf("unlocking mutex from %d\n", thread_func_args->sock_fd);
 
     pthread_mutex_unlock(thread_func_args->write_mutex);
 
-
     thread_func_args->thread_complete_success = true;
 
     return thread_param;
-
 }
 
+void* ten_second_timer(void *thread_param)
+{
+
+    struct tm *tmp;
+
+    struct thread_data *thread_func_args = (struct thread_data *)thread_param;
+    // // Receive via file descriptor until \n
+
+    double elapsed_time;
+
+    time_t current_time;
+
+    // I think I can just spawn after getting a connection, less things to pass thru
+
+    while (1)
+    {
+        current_time = time(NULL);
+        elapsed_time = difftime(current_time, thread_func_args->start_time);
+
+        if (elapsed_time >= 10.0)
+        {
+            tmp = localtime(&current_time);
+            if (tmp == NULL)
+            {
+                perror("localtime");
+                exit(EXIT_FAILURE);
+            }
+
+            char time_str[128];
+            pthread_mutex_lock(thread_func_args->write_mutex);
+
+            FILE *localfile = fopen(FILELOCATION, "a+");
+
+            strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", tmp);
+
+
+            // fwrite("timestamp:", sizeof(char), 12, localfile);
+            fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
+            // fwrite("\n", sizeof(char), 2, localfile);
+
+            fflush(localfile);
+
+            fclose(localfile);
+
+            pthread_mutex_unlock(thread_func_args->write_mutex);
+
+
+            thread_func_args->start_time = time(NULL);
+        }
+    }
+
+    return thread_param;
+}
 
 // arg 1 is path to file
 // arg 2 is string to write to file
 int main(int argc, char *argv[])
 {
+    time_t start_time = time(NULL);
     int daemonflag = 0;
     int sockfd; // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
@@ -272,6 +321,14 @@ int main(int argc, char *argv[])
     {
         daemonize();
     }
+
+    // Create the timer thread
+    pthread_t p_thread;
+    struct thread_data *thread_param = malloc(sizeof(struct thread_data));
+    thread_param->write_mutex = &write_mutex;
+    thread_param->start_time = start_time;
+    pthread_create(&p_thread, NULL,
+                   &ten_second_timer, thread_param);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -352,7 +409,6 @@ int main(int argc, char *argv[])
 
     struct entry *np; // used for iteration
 
-
     while (1)
     { // main accept() loop
         sin_size = sizeof their_addr;
@@ -372,34 +428,30 @@ int main(int argc, char *argv[])
         syslog(LOG_DEBUG, "server: got connection from %s\n", s);
         /////////////
 
-
         struct thread_data *thread_param = malloc(sizeof(struct thread_data));
 
         pthread_t p_thread;
         thread_param->write_mutex = &write_mutex;
         thread_param->sock_fd = new_fd;
 
-
         // Put some things in the list
         struct entry *thread_linked_list_entry = malloc(sizeof(struct entry));
         thread_linked_list_entry->thread_data = thread_param;
         thread_linked_list_entry->thread_id = &p_thread;
 
-
         syslog(LOG_DEBUG, "server: created thread");
 
         pthread_create(&p_thread, NULL,
-                            &receive_write_send, thread_param);
+                       &receive_write_send, thread_param);
 
         SLIST_INSERT_HEAD(&head, thread_linked_list_entry, entries);
 
         SLIST_FOREACH(np, &head, entries)
-            if (np->thread_data->thread_complete_success) {
-                pthread_join(*(np->thread_id), NULL);
-            }
-
+        if (np->thread_data->thread_complete_success)
+        {
+            pthread_join(*(np->thread_id), NULL);
+        }
     }
 
     return rv;
 }
-
