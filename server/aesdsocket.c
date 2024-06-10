@@ -354,6 +354,7 @@ int main(int argc, char *argv[])
 
     // timer initilization
     int clock_id = CLOCK_MONOTONIC;
+    bool timer_started = false;
     struct sigevent sev;
     memset(&sev, 0, sizeof(struct sigevent));
     sev.sigev_notify = SIGEV_SIGNAL;
@@ -362,21 +363,6 @@ int main(int argc, char *argv[])
     if (timer_create(clock_id, &sev, &timerid) != 0)
     {
         printf("Error %d (%s) creating timer!\n", errno, strerror(errno));
-    }
-    else
-    {
-        /**
-         * Set sleep time to 2.001 s to ensure the last ms aligned timer event is fired
-         */
-        // sleep_time.tv_sec = 10;
-        // sleep_time.tv_nsec = 0;
-        struct itimerspec its;
-        // Set up timer expiration time
-        its.it_value.tv_sec = 10; // 10 seconds
-        its.it_value.tv_nsec = 0;
-        its.it_interval.tv_sec = 0;
-        its.it_interval.tv_nsec = 0;
-        timer_settime(timerid, 0, &its, NULL);
     }
 
     // pthread_create(&p_thread, NULL,
@@ -479,6 +465,17 @@ int main(int argc, char *argv[])
         sin_size = sizeof their_addr;
 
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+
+        if (!timer_started) {
+            struct itimerspec its;
+            // Set up timer expiration time
+            its.it_value.tv_sec = 10; // 10 seconds
+            its.it_value.tv_nsec = 0;
+            its.it_interval.tv_sec = 0;
+            its.it_interval.tv_nsec = 0;
+            timer_settime(timerid, 0, &its, NULL);
+            timer_started = true;
+        }
 
         if (new_fd == -1)
         {
