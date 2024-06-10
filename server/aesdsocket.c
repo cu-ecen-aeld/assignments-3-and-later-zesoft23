@@ -25,6 +25,8 @@
 
 FILE *myfile;
 int new_fd;
+pthread_mutex_t write_mutex = PTHREAD_MUTEX_INITIALIZER;
+timer_t timerid;
 
 struct thread_data
 {
@@ -102,30 +104,66 @@ void sigchld_handler(int s)
         printf("SIGINT received. ");
     else if (s == SIGTERM)
         printf("SIGTERM received. ");
+    else if (s == SIGALRM)
+        printf("SIGALRM received");
 
-    // waitpid() might overwrite errno, so we save and restore it:
-    int saved_errno = errno;
-
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ;
-
-    // Attempt to delete the file
-    if (remove(FILELOCATION) == 0)
+    if (s == SIGALRM)
     {
-        printf("File %s deleted successfully.\n", FILELOCATION);
+        time_t current_time;
+        struct itimerspec its;
+        its.it_value.tv_sec = 10; // 10 seconds
+        its.it_value.tv_nsec = 0;
+        its.it_interval.tv_sec = 0;
+        its.it_interval.tv_nsec = 0;
+        timer_settime(timerid, 0, &its, NULL);
+
+        current_time = time(NULL);
+
+        char time_str[128];
+
+        // 0 out the array to end the write
+        memset(time_str, 0, sizeof(time_str));
+        pthread_mutex_lock(&write_mutex);
+
+        FILE *localfile = fopen(FILELOCATION, "a+");
+
+        strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
+
+        fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
+
+        fflush(localfile);
+
+        fclose(localfile);
+
+        pthread_mutex_unlock(&write_mutex);
+
+
     }
-    else
-    {
-        printf("Unable to delete the file %s.\n", FILELOCATION);
-        perror("remove");
+    else {
+        // waitpid() might overwrite errno, so we save and restore it:
+        int saved_errno = errno;
+
+        while (waitpid(-1, NULL, WNOHANG) > 0)
+            ;
+
+        // Attempt to delete the file
+        if (remove(FILELOCATION) == 0)
+        {
+            printf("File %s deleted successfully.\n", FILELOCATION);
+        }
+        else
+        {
+            printf("Unable to delete the file %s.\n", FILELOCATION);
+            perror("remove");
+        }
+
+        syslog(LOG_DEBUG, "Caught signal, exiting");
+        printf("Caught signal, exiting\n");
+
+        errno = saved_errno;
+
+        exit(0);
     }
-
-    syslog(LOG_DEBUG, "Caught signal, exiting");
-    printf("Caught signal, exiting\n");
-
-    errno = saved_errno;
-
-    exit(0);
 }
 
 // get sockaddr, IPv4 or IPv6:
@@ -225,50 +263,50 @@ void *receive_write_send(void *thread_param)
     return thread_param;
 }
 
-void* ten_second_timer(void *thread_param)
-{
+// void *ten_second_timer(void *thread_param)
+// {
+//     // Influence taken from timer_thread.c in the lecture files
+//     // https://github.com/cu-ecen-aeld/aesd-lectures/blob/master/lecture9/timer_thread.c
 
-    struct thread_data *thread_func_args = (struct thread_data *)thread_param;
-    // // Receive via file descriptor until \n
+//     struct thread_data *thread_func_args = (struct thread_data *)thread_param;
+//     // // Receive via file descriptor until \n
 
-    // double elapsed_time;
+//     // double elapsed_time;
 
-    time_t current_time;
+//     time_t current_time;
 
-    // I think I can just spawn after getting a connection, less things to pass thru
+//     // I think I can just spawn after getting a connection, less things to pass thru
 
-    while (1)
-    {
-        // elapsed_time = difftime(current_time, thread_func_args->start_time);
+//     while (1)
+//     {
+//         // elapsed_time = difftime(current_time, thread_func_args->start_time);
 
+//         sleep(10);
+//         current_time = time(NULL);
 
-        sleep(10);
-        current_time = time(NULL);
+//         char time_str[128];
 
-        char time_str[128];
+//         // 0 out the array to end the write
+//         memset(time_str, 0, sizeof(time_str));
+//         pthread_mutex_lock(thread_func_args->write_mutex);
 
-        // 0 out the array to end the write
-        memset(time_str, 0, sizeof(time_str));
-        pthread_mutex_lock(thread_func_args->write_mutex);
+//         FILE *localfile = fopen(FILELOCATION, "a+");
 
-        FILE *localfile = fopen(FILELOCATION, "a+");
+//         strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
 
-        strftime(time_str, sizeof(time_str), "timestamp: %a, %d %b %Y %T %z\n", localtime(&current_time));
+//         fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
 
-        fwrite(time_str, sizeof(char), sizeof(time_str), localfile);
+//         fflush(localfile);
 
-        fflush(localfile);
+//         fclose(localfile);
 
-        fclose(localfile);
+//         pthread_mutex_unlock(thread_func_args->write_mutex);
 
-        pthread_mutex_unlock(thread_func_args->write_mutex);
+//         thread_func_args->start_time = time(NULL);
+//     }
 
-
-        thread_func_args->start_time = time(NULL);
-    }
-
-    return thread_param;
-}
+//     return thread_param;
+// }
 
 // arg 1 is path to file
 // arg 2 is string to write to file
@@ -288,8 +326,6 @@ int main(int argc, char *argv[])
     // singly list inits
     struct slisthead head;
     SLIST_INIT(&head); /* Initialize the queue */
-    // mutex for writing to file
-    pthread_mutex_t write_mutex = PTHREAD_MUTEX_INITIALIZER;
 
     int c;
     // Get the args -d arg if it exists
@@ -315,15 +351,42 @@ int main(int argc, char *argv[])
     thread_param->start_time = start_time;
     thread_param->thread_complete_success = false;
     thread_param->sock_fd = 0;
-    pthread_create(&p_thread, NULL,
-                   &ten_second_timer, thread_param);
+
+    // timer initilization
+    int clock_id = CLOCK_MONOTONIC;
+    struct sigevent sev;
+    memset(&sev, 0, sizeof(struct sigevent));
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGALRM;
+    sev.sigev_value.sival_ptr = &timerid;
+    if (timer_create(clock_id, &sev, &timerid) != 0)
+    {
+        printf("Error %d (%s) creating timer!\n", errno, strerror(errno));
+    }
+    else
+    {
+        /**
+         * Set sleep time to 2.001 s to ensure the last ms aligned timer event is fired
+         */
+        // sleep_time.tv_sec = 10;
+        // sleep_time.tv_nsec = 0;
+        struct itimerspec its;
+        // Set up timer expiration time
+        its.it_value.tv_sec = 10; // 10 seconds
+        its.it_value.tv_nsec = 0;
+        its.it_interval.tv_sec = 0;
+        its.it_interval.tv_nsec = 0;
+        timer_settime(timerid, 0, &its, NULL);
+    }
+
+    // pthread_create(&p_thread, NULL,
+    //                &ten_second_timer, thread_param);
 
     struct entry *thread_linked_list_entry = malloc(sizeof(struct entry));
     thread_linked_list_entry->thread_data = thread_param;
     thread_linked_list_entry->thread_id = &p_thread;
 
     SLIST_INSERT_HEAD(&head, thread_linked_list_entry, entries);
-
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -400,6 +463,13 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    // Set the handler for SIGALRM
+    if (sigaction(SIGALRM, &sa, NULL) == -1)
+    {
+        perror("sigaction");
+        // exit(1);
+    }
+
     printf("server: waiting for connections...\n");
 
     struct entry *np; // used for iteration
@@ -442,14 +512,13 @@ int main(int argc, char *argv[])
 
         // janky and doesn't assumes first in first out until it can join
         np = SLIST_FIRST(&head);
-        if (np->thread_data->thread_complete_success) {
+        if (np->thread_data->thread_complete_success)
+        {
             pthread_join(*(np->thread_id), NULL);
             SLIST_REMOVE_HEAD(&head, entries);
             free(np->thread_data);
             free(np);
         }
-
-
     }
 
     return rv;
