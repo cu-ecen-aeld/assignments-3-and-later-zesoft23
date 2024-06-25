@@ -10,6 +10,11 @@
 
 #define AESD_DEBUG 1  //Remove comment on this line to enable debug
 
+#include "aesd-circular-buffer.h"
+
+// May need to do something about compiling this both for kernel and userspace
+#include <linux/mutex.h>
+
 #undef PDEBUG             /* undef it, just in case */
 #ifdef AESD_DEBUG
 #  ifdef __KERNEL__
@@ -25,10 +30,14 @@
 
 struct aesd_dev
 {
-    /**
-     * TODO: Add structure(s) and locks needed to complete assignment requirements
-     */
-    struct cdev cdev;     /* Char device structure      */
+     // Used for buffering until we reach a "\n"
+     struct aesd_buffer_entry working_aesd_buffer_entry;
+     // Circular buffer structure to use
+     struct aesd_circular_buffer aesd_circular_buffer;
+     // Mutex that needs to be acquired
+     struct mutex *lock;
+
+     struct cdev cdev;     /* Char device structure      */
 };
 
 

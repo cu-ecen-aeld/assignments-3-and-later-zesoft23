@@ -72,13 +72,18 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * new start location.
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
+* @return NULL or, if an existing entry at out_offs was repcaed, the value of buffptr for the entry which was replaced
+*   (for use with dynamic memory allocation/free)
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
 
-    // if (buffer->full) {
-    //     FREE(&buffer->entry[buffer->in_offs % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED]);
-    // }
+    const char *old_entry = NULL;
+
+    // return the pointer if we're overwriting something so we can free it in the driver
+    if (buffer->full) {
+        old_entry = buffer->entry[buffer->in_offs % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED].buffptr;
+    }
     buffer->entry[buffer->in_offs % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED] = *add_entry;
     if (!buffer->full) {
         buffer->in_offs += 1;
@@ -86,13 +91,15 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     else if(buffer->full) {
         buffer->in_offs += 1;
         buffer->out_offs += 1;
+
     }
 
     // Mark buffer as full if the size of the buffer is reached
     if (!buffer->full && buffer->in_offs == (AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)) {
         buffer->full = true;
-        // buffer->out_offs += 1;
     }
+
+    return old_entry;
 
 }
 

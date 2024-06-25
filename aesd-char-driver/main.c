@@ -21,7 +21,7 @@
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Jack Thomson");
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -29,9 +29,12 @@ struct aesd_dev aesd_device;
 int aesd_open(struct inode *inode, struct file *filp)
 {
     PDEBUG("open");
-    /**
-     * TODO: handle open
-     */
+
+	struct scull_dev *dev; /* device information */
+
+	dev = container_of(inode->i_cdev, struct scull_dev, cdev);
+	filp->private_data = dev; /* for other methods */
+
     return 0;
 }
 
@@ -49,9 +52,13 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
+
+	struct aesd_dev *dev = filp->private_data;
+
+    // read only until the size is done, update f_pos correctly
+
+    // wrong erstartsys/eintr/efault if something is wrong
+
     return retval;
 }
 
@@ -60,9 +67,10 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 {
     ssize_t retval = -ENOMEM;
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
+
+    // every write should append to the command being written
+    // write entire sting into command buffer when a newline is received
+
     return retval;
 }
 struct file_operations aesd_fops = {
@@ -102,9 +110,7 @@ int aesd_init_module(void)
     }
     memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-    /**
-     * TODO: initialize the AESD specific portion of the device
-     */
+    mutex_init(aesd_device.lock);
 
     result = aesd_setup_cdev(&aesd_device);
 
@@ -121,9 +127,8 @@ void aesd_cleanup_module(void)
 
     cdev_del(&aesd_device.cdev);
 
-    /**
-     * TODO: cleanup AESD specific poritions here as necessary
-     */
+    mutex_destroy(aesd_device.lock);
+    free(aesd_device);
 
     unregister_chrdev_region(devno, 1);
 }
